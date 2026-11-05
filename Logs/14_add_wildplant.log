@@ -1,0 +1,20 @@
+-------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/florian/Desktop/博士研究计划/Logs/14_add_wildplant.log
+  log type:  text
+ opened on:   6 Nov 2026, 00:10:12
+
+. 
+. use "$root/law_env.dta", clear
+
+. quietly count if title == "中华人民共和国野生植物保护条例"
+
+. if r(N) > 0 {
+.     di as err "已存在，未做修改。"
+已存在，未做修改。
+.     log close
+      name:  <unnamed>
+       log:  /Users/florian/Desktop/博士研究计划/Logs/14_add_wildplant.log
+  log type:  text
+ closed on:   6 Nov 2026, 00:10:12
+-------------------------------------------------------------------------------

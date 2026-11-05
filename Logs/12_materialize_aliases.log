@@ -1,0 +1,135 @@
+-------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/florian/Desktop/博士研究计划/Logs/12_materialize_aliases.lo
+> g
+  log type:  text
+ opened on:   6 Nov 2026, 00:05:14
+
+. 
+. use "$root/law_env.dta", clear
+
+. quietly count
+
+. local n0 = r(N)
+
+. gen long _row = _n
+
+. quietly summarize id
+
+. local nextid = r(max) + 1
+
+. 
+. local pairs "中华人民共和国城市供水条例=城市供水条例 中华人民共和国基本农田保
+> 护条例=基本农田保护条例 中华民族共和国森林法=中华人民共和国森林法 中国人民共
+> 和国森林法=中华人民共和国森林法 中国人民共和国水污染防治法=中华人民共和国水污
+> 染防治法"
+
+. 
+. local added = 0
+
+. foreach p of local pairs {
+  2.     local alias = substr("`p'", 1, strpos("`p'","=")-1)
+  3.     local canon = substr("`p'", strpos("`p'","=")+1, .)
+  4. 
+.     quietly count if title == "`alias'"
+  5.     if r(N) > 0 {
+  6.         di as txt "  已存在，跳过：`alias'"
+  7.         continue
+  8.     }
+  9.     quietly count if title == "`canon'"
+ 10.     if r(N) == 0 {
+ 11.         di as err "  未找到母本，跳过：`canon'"
+ 12.         continue
+ 13.     }
+ 14. 
+.     quietly levelsof _row if title == "`canon'", local(crow)
+ 15.     quietly count
+ 16.     local new = r(N) + 1
+ 17.     set obs `new'
+ 18. 
+.     foreach v of varlist _all {
+ 19.         capture confirm numeric variable `v'
+ 20.         if _rc == 0 {
+ 21.             quietly replace `v' = `v'[`crow'] in `new'
+ 22.         }
+ 23.         else {
+ 24.             quietly replace `v' = `v'[`crow'] in `new'
+ 25.         }
+ 26.     }
+ 27.     quietly replace id       = `nextid'          in `new'
+ 28.     quietly replace title    = "`alias'"         in `new'
+ 29.     quietly replace source_id = source_id[`crow'] + "｜按引用写法单列" in 
+> `new'
+ 30.     quietly replace create_time = "2026-11-06 00:05:00" in `new'
+ 31.     quietly replace _row     = `new'             in `new'
+ 32.     local ++nextid
+ 33.     local ++added
+ 34.     di as txt "  + `alias'（母本 id " id[`new'] "）"
+ 35. }
+Number of observations (_N) was 3,914, now 3,915.
+  + 中华人民共和国城市供水条例（母本 id 31701）
+Number of observations (_N) was 3,915, now 3,916.
+  + 中华人民共和国基本农田保护条例（母本 id 31702）
+Number of observations (_N) was 3,916, now 3,917.
+  + 中华民族共和国森林法（母本 id 31703）
+Number of observations (_N) was 3,917, now 3,918.
+  + 中国人民共和国森林法（母本 id 31704）
+Number of observations (_N) was 3,918, now 3,919.
+  + 中国人民共和国水污染防治法（母本 id 31705）
+
+. 
+. drop _row
+
+. quietly count
+
+. di as txt _n "新增 " `added' " 条；现共 " r(N) " 条"
+
+新增 5 条；现共 3919 条
+
+. duplicates report id
+
+Duplicates in terms of id
+
+--------------------------------------
+   Copies | Observations       Surplus
+----------+---------------------------
+        1 |         3919             0
+--------------------------------------
+
+. quietly duplicates report id
+
+. if r(unique_value) != r(N) {
+.     di as err "id 不唯一，未保存。"
+.     log close
+.     exit
+. }
+
+. save "$root/law_env.dta", replace
+file /Users/florian/Desktop/博士研究计划/law_env.dta saved
+
+. di as res "已保存：law_env.dta"
+已保存：law_env.dta
+
+. 
+. list id title source_id if id > `nextid' - `added' - 1, clean noobs
+
+       id                            title                                     
+>                                                   source_id  
+    31701       中华人民共和国城市供水条例   https://zjt.fj.gov.cn/ztzl/wqzt/cs
+> wsljcyhzt/flfg/199410/t19941001_2638792.htm｜按引用写法单列  
+    31702   中华人民共和国基本农田保护条例                                     
+>                                            ｜按引用写法单列  
+    31703             中华民族共和国森林法                                  ZmY
+> 4MDgwODE3MWU5ZTE4MTAxNzI3ZTU1NDM2MjdmNTI%3D｜按引用写法单列  
+    31704             中国人民共和国森林法                                  ZmY
+> 4MDgwODE3MWU5ZTE4MTAxNzI3ZTU1NDM2MjdmNTI%3D｜按引用写法单列  
+    31705       中国人民共和国水污染防治法                                     
+>                                            ｜按引用写法单列  
+
+. log close
+      name:  <unnamed>
+       log:  /Users/florian/Desktop/博士研究计划/Logs/12_materialize_aliases.lo
+> g
+  log type:  text
+ closed on:   6 Nov 2026, 00:05:14
+-------------------------------------------------------------------------------

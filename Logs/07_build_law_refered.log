@@ -1,0 +1,246 @@
+-------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/florian/Desktop/博士研究计划/Logs/07_build_law_refered.log
+  log type:  text
+ opened on:   6 Nov 2026, 00:30:10
+
+. 
+. *----------------------------------------------------------------------------
+> -
+. * 1. 构建"归一化法名 → 唯一 id"查询表
+. *----------------------------------------------------------------------------
+> -
+. use "$root/law_env.dta", clear
+
+. quietly count
+
+. local nrec = r(N)
+
+. keep id title publish_year
+
+. gen str244 ntitle = ustrregexra(title, "[《》＜＞<>]", "")
+
+. replace ntitle = ustrregexra(ntitle, "\s", "")
+(6 real changes made)
+
+. replace ntitle = ustrregexra(ntitle, "[（(][^）)]*[）)]$", "")
+(6 real changes made)
+
+. 
+. gsort ntitle -publish_year id
+
+. by ntitle: gen byte seq = _n
+
+. 
+. quietly count if seq == 1
+
+. di as txt "库内记录 " `nrec' " 条 → 归一化后不同法名 " r(N) " 个"
+库内记录 3911 条 → 归一化后不同法名 3910 个
+
+. quietly count if seq > 1
+
+. di as txt "同名多记录（已按 最新年份→最小id 保留其一）：" r(N) " 条"
+同名多记录（已按 最新年份→最小id 保留其一）：1 条
+
+. 
+. keep if seq == 1
+(1 observation deleted)
+
+. keep ntitle id
+
+. rename id refered_law_id
+
+. tempfile lookup
+
+. save `lookup'
+file /var/folders/7m/37x7vvj50kb31gpc00_ww0gc0000gn/T//St09809.000001 saved
+    as .dta format
+
+. 
+. * 1b. 并入名称变体别名（错字、多余前缀等），避免重复入库
+. capture confirm file "$root/Codes/_law_aliases.csv"
+
+. if _rc == 0 {
+.     import delimited "$root/Codes/_law_aliases.csv", clear ///
+>         varnames(1) encoding("utf-8") stringcols(1)
+.     append using `lookup'
+.     bysort ntitle: keep if _n == 1     // 别名行在前，优先保留
+.     quietly count
+.     di as txt "并入别名后查表条目：" r(N)
+.     save `lookup', replace
+. }
+
+. 
+. *----------------------------------------------------------------------------
+> -
+. * 2. 拆开 refered，生成引用关系
+. *----------------------------------------------------------------------------
+> -
+. use "$root/law_env.dta", clear
+
+. keep id title refered          // 只保留所需变量，避免把 strL 正文带进边表
+
+. keep if refered != ""
+(1,337 observations deleted)
+
+. quietly count
+
+. di as txt "有具名依据的记录：" r(N) " 条"
+有具名依据的记录：2574 条
+
+. 
+. split refered, parse("；") gen(r)
+variables created as string: 
+r1  r2  r3  r4  r5  r6  r7  r8
+
+. reshape long r, i(id) j(k)
+(j = 1 2 3 4 5 6 7 8)
+
+Data                               Wide   ->   Long
+-----------------------------------------------------------------------------
+Number of observations            2,574   ->   20,592      
+Number of variables                  11   ->   5           
+j variable (8 values)                     ->   k
+xij variables:
+                           r1 r2 ... r8   ->   r
+-----------------------------------------------------------------------------
+
+. drop if r == ""
+(15,762 observations deleted)
+
+. quietly count
+
+. local nedge = r(N)
+
+. di as txt "共生成引用关系 " `nedge' " 条"
+共生成引用关系 4830 条
+
+. 
+. rename id raw_law_id
+
+. rename title raw_law
+
+. rename r refered_law
+
+. drop k refered
+
+. 
+. gen str244 ntitle = ustrregexra(refered_law, "[《》＜＞<>]", "")
+
+. replace ntitle = ustrregexra(ntitle, "\s", "")
+(0 real changes made)
+
+. replace ntitle = ustrregexra(ntitle, "[（(][^）)]*[）)]$", "")
+(0 real changes made)
+
+. 
+. merge m:1 ntitle using `lookup', keep(master match) nogen
+
+    Result                      Number of obs
+    -----------------------------------------
+    Not matched                             0
+    Matched                             4,830  
+    -----------------------------------------
+
+. drop ntitle
+
+. 
+. *----------------------------------------------------------------------------
+> -
+. * 3. 整理与标注
+. *----------------------------------------------------------------------------
+> -
+. order raw_law raw_law_id refered_law refered_law_id
+
+. label variable raw_law        "引用方法规名称"
+
+. label variable raw_law_id     "引用方 id"
+
+. label variable refered_law    "被引用的法律名称"
+
+. label variable refered_law_id "被引法律 id（库中无则缺失）"
+
+. label data "法规引用关系长表：一行 = 一条引用"
+
+. 
+. sort raw_law_id refered_law
+
+. save "$root/law_refered.dta", replace
+file /Users/florian/Desktop/博士研究计划/law_refered.dta saved
+
+. di as res "已保存：law_refered.dta（" _N " 条）"
+已保存：law_refered.dta（4830 条）
+
+. 
+. *----------------------------------------------------------------------------
+> -
+. * 4. 复核
+. *----------------------------------------------------------------------------
+> -
+. quietly count if !missing(refered_law_id)
+
+. di as txt _n "能匹配到 id 的引用：" r(N) " / " _N "（" %4.1f 100*r(N)/_N "%）
+> "
+
+能匹配到 id 的引用：4830 / 4830（100.0%）
+
+. quietly count if refered_law_id == raw_law_id
+
+. di as txt "自引（被引 id 与引用方相同）：" r(N) " 条"
+自引（被引 id 与引用方相同）：0 条
+
+. 
+. di as res _n "== 被引次数前十（按被引法律名称） =="
+
+== 被引次数前十（按被引法律名称） ==
+
+. preserve
+
+.     keep refered_law refered_law_id
+
+.     contract refered_law, freq(f)
+
+.     gsort -f
+
+.     list refered_law f in 1/10, clean noobs
+
+                             refered_law     f  
+                中华人民共和国环境保护法   551  
+                      中华人民共和国水法   457  
+              中华人民共和国水污染防治法   395  
+            中华人民共和国大气污染防治法   249  
+    中华人民共和国固体废物污染环境防治法   224  
+              城市市容和环境卫生管理条例   213  
+                    中华人民共和国森林法   201  
+                            城市绿化条例   156  
+                中华人民共和国矿产资源法   109  
+            中华人民共和国民族区域自治法   107  
+
+. restore
+
+. 
+. di as res _n "== 前 5 条记录 =="
+
+== 前 5 条记录 ==
+
+. list in 1/5, clean noobs
+
+                                       raw_law   raw_la~d                    re
+> fered_law   refere~d  
+                阳江市水产养殖尾水污染防治规定         22     中华人民共和国水
+> 污染防治法       1175  
+                阳江市水产养殖尾水污染防治规定         22   中华人民共和国海洋
+> 环境保护法      20482  
+                阳江市水产养殖尾水污染防治规定         22       中华人民共和国
+> 环境保护法       1219  
+    湘西土家族苗族自治州花垣县矿山生态修复条例         23       中华人民共和国
+> 环境保护法       1219  
+    湘西土家族苗族自治州花垣县矿山生态修复条例         23       中华人民共和国
+> 矿产资源法      20510  
+
+. log close
+      name:  <unnamed>
+       log:  /Users/florian/Desktop/博士研究计划/Logs/07_build_law_refered.log
+  log type:  text
+ closed on:   6 Nov 2026, 00:30:10
+-------------------------------------------------------------------------------

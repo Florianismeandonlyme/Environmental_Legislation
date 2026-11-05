@@ -1,0 +1,54 @@
+-------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/florian/Desktop/博士研究计划/Logs/16_normalize_titles.log
+  log type:  text
+ opened on:   6 Nov 2026, 00:14:35
+
+. 
+. use "$root/law_env.dta", clear
+
+. quietly count if strpos(title, "＜") > 0 | strpos(title, "＞") > 0
+
+. di as txt "含全角尖括号的标题：" r(N) " 条"
+含全角尖括号的标题：1 条
+
+. list title if strpos(title, "＜") > 0 | strpos(title, "＞") > 0, clean noobs
+
+                                         title  
+    山西省实施＜中华人民共和国水土保持法＞办法  
+
+. 
+. replace title = subinstr(title, "＜", "《", .)
+(1 real change made)
+
+. replace title = subinstr(title, "＞", "》", .)
+(1 real change made)
+
+. quietly count if strpos(title, "＜") > 0 | strpos(title, "＞") > 0
+
+. di as txt "替换后仍含尖括号：" r(N) " 条"
+替换后仍含尖括号：0 条
+
+. 
+. duplicates report title
+
+Duplicates in terms of title
+
+--------------------------------------
+   Copies | Observations       Surplus
+----------+---------------------------
+        1 |         3911             0
+--------------------------------------
+
+. save "$root/law_env.dta", replace
+file /Users/florian/Desktop/博士研究计划/law_env.dta saved
+
+. di as res "已保存：law_env.dta"
+已保存：law_env.dta
+
+. log close
+      name:  <unnamed>
+       log:  /Users/florian/Desktop/博士研究计划/Logs/16_normalize_titles.log
+  log type:  text
+ closed on:   6 Nov 2026, 00:14:35
+-------------------------------------------------------------------------------

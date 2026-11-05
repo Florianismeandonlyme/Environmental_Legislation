@@ -1,0 +1,148 @@
+
+  ___  ____  ____  ____  ____ ®
+ /__    /   ____/   /   ____/      18.0
+___/   /   /___/   /   /___/       MP—Parallel Edition
+
+ Statistics and Data Science       Copyright 1985-2023 StataCorp LLC
+                                   StataCorp
+                                   4905 Lakeway Drive
+                                   College Station, Texas 77845 USA
+                                   800-STATA-PC        https://www.stata.com
+                                   979-696-4600        stata@stata.com
+
+Stata license: Single-user 2-core  perpetual
+Serial number: 501806366048
+  Licensed to: Florian
+               LA
+
+Notes:
+      1. Stata is running in batch mode.
+      2. Unicode is supported; see help unicode_advice.
+      3. More than 2 billion observations are allowed; see help obs_advice.
+      4. Maximum number of variables is set to 5,000 but can be increased;
+          see help set_maxvar.
+
+. do Codes/17_reclassify_local.do 
+
+. *============================================================================
+> =
+. * 17_reclassify_local.do
+. * 目的：纠正 5 条被误标为"国家级"的地方性法规
+. *   这些是按名称规则自动推断 type/region_level 时出错的（见 10_build_missing_
+> csv.py），
+. *   名称里带"经济特区/自由贸易港/开发区/地方性法规"等地方标识，实为省级人大立
+> 法。
+. *   若不纠正，按 region_level==1 取"国家立法"样本时会被误纳入。
+. *============================================================================
+> =
+. version 17
+
+. clear all
+
+. set more off
+
+. global root "/Users/florian/Desktop/博士研究计划"
+
+. capture log close
+
+. log using "$root/Logs/17_reclassify_local.log", replace text
+-------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/florian/Desktop/博士研究计划/Logs/17_reclassify_local.log
+  log type:  text
+ opened on:   6 Nov 2026, 00:29:21
+
+. 
+. use "$root/law_env.dta", clear
+
+. 
+. local t1 "海南经济特区水条例"
+
+. local t2 "海南自由贸易港海口江东新区条例"
+
+. local t3 "天津经济技术开发区管理条例"
+
+. local t4 "关于取消或调整部分地方性法规设定的行政审批等项目的决定"
+
+. local t5 "关于取消部分地方性法规中行政许可项目的决定"
+
+. 
+. * 海南省（460000）
+. foreach t in "`t1'" "`t2'" {
+  2.     replace type = "地方性法规" if title == "`t'"
+  3.     replace region_level = 2 if title == "`t'"
+  4.     replace province_name = "海南省" if title == "`t'"
+  5.     replace province_code = 460000 if title == "`t'"
+  6. }
+(1 real change made)
+(1 real change made)
+(0 real changes made)
+(0 real changes made)
+(1 real change made)
+(1 real change made)
+(0 real changes made)
+(0 real changes made)
+
+. * 天津市（120000）
+. replace type = "地方性法规" if title == "`t3'"
+(1 real change made)
+
+. replace region_level = 2 if title == "`t3'"
+(1 real change made)
+
+. replace province_name = "天津市" if title == "`t3'"
+(0 real changes made)
+
+. replace province_code = 120000 if title == "`t3'"
+(0 real changes made)
+
+. * 重庆市（500000）
+. foreach t in "`t4'" "`t5'" {
+  2.     replace type = "地方性法规" if title == "`t'"
+  3.     replace region_level = 2 if title == "`t'"
+  4.     replace province_name = "重庆市" if title == "`t'"
+  5.     replace province_code = 500000 if title == "`t'"
+  6. }
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+
+. 
+. list id title type region_level province_name ///
+>     if inlist(title, "`t1'", "`t2'", "`t3'", "`t4'", "`t5'"), clean noobs
+
+       id                                                    title         type
+>    region~l   provi~me  
+    31611   关于取消或调整部分地方性法规设定的行政审批等项目的决定   地方性法规
+>        省级     重庆市  
+    31612               关于取消部分地方性法规中行政许可项目的决定   地方性法规
+>        省级     重庆市  
+    31629                               天津经济技术开发区管理条例   地方性法规
+>        省级     天津市  
+    31656                                       海南经济特区水条例   地方性法规
+>        省级     海南省  
+    31657                           海南自由贸易港海口江东新区条例   地方性法规
+>        省级     海南省  
+
+. save "$root/law_env.dta", replace
+file /Users/florian/Desktop/博士研究计划/law_env.dta saved
+
+. di as res "已保存：law_env.dta"
+已保存：law_env.dta
+
+. log close
+      name:  <unnamed>
+       log:  /Users/florian/Desktop/博士研究计划/Logs/17_reclassify_local.log
+  log type:  text
+ closed on:   6 Nov 2026, 00:29:21
+-------------------------------------------------------------------------------
+
+. *============================================================================
+> =
+. 
+end of do-file

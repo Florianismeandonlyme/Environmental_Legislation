@@ -1,0 +1,152 @@
+-------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/florian/Desktop/博士研究计划/Logs/00_split_national.log
+  log type:  text
+ opened on:   5 Nov 2026, 22:00:41
+
+. 
+. *----------------------------------------------------------------------------
+> -
+. * 1. 体检：确认是否已经拆分过
+. *----------------------------------------------------------------------------
+> -
+. use "$root/law_env.dta", clear
+
+. quietly count
+
+. local n0 = r(N)
+
+. quietly count if region_level == 1
+
+. local n1 = r(N)
+
+. di as txt "law_env.dta 现有记录：" `n0' " 条"
+law_env.dta 现有记录：3747 条
+
+. di as txt "其中 region_level==1（国家级）：" `n1' " 条"
+其中 region_level==1（国家级）：112 条
+
+. 
+. if `n1' == 0 {
+.     di as err _n "law_env.dta 中已无国家级记录，可能已经拆分过；本脚本不做修
+> 改。"
+.     log close
+.     exit
+. }
+
+. * 拆完后应有的省级及以下记录数
+. local n2 = `n0' - `n1'
+
+. 
+. *----------------------------------------------------------------------------
+> -
+. * 2. 抽出国家级 → law_env_national.dta
+. *----------------------------------------------------------------------------
+> -
+. keep if region_level == 1
+(3,635 observations deleted)
+
+. save "$root/law_env_national.dta", replace
+file /Users/florian/Desktop/博士研究计划/law_env_national.dta saved
+
+. quietly count
+
+. di as res "law_env_national.dta 已生成：" r(N) " 条"
+law_env_national.dta 已生成：112 条
+
+. 
+. *----------------------------------------------------------------------------
+> -
+. * 3. 从原始文件中删除国家级 → law_env.dta（覆盖）
+. *----------------------------------------------------------------------------
+> -
+. use "$root/law_env.dta", clear
+
+. drop if region_level == 1
+(112 observations deleted)
+
+. quietly count
+
+. if r(N) != `n2' {
+.     di as err "记录数校验失败：应为 `n2' 条，实际 " r(N) " 条；未覆盖原文件。
+> "
+.     log close
+.     exit
+. }
+
+. save "$root/law_env.dta", replace
+file /Users/florian/Desktop/博士研究计划/law_env.dta saved
+
+. di as res "law_env.dta 已更新：剩余 " r(N) " 条（其中国家级记录已移出）"
+law_env.dta 已更新：剩余 3635 条（其中国家级记录已移出）
+
+. 
+. *----------------------------------------------------------------------------
+> -
+. * 4. 复核
+. *----------------------------------------------------------------------------
+> -
+. di as res _n "== law_env.dta（已剔除国家级） =="
+
+== law_env.dta（已剔除国家级） ==
+
+. tab region_level, m
+
+     行政层 |
+   级 1国家 |
+    2省 3市 |
+        4县 |      Freq.     Percent        Cum.
+------------+-----------------------------------
+       省级 |      1,290       35.49       35.49
+       市级 |      2,140       58.87       94.36
+       县级 |        205        5.64      100.00
+------------+-----------------------------------
+      Total |      3,635      100.00
+
+. 
+. use "$root/law_env_national.dta", clear
+
+. di as res _n "== law_env_national.dta =="
+
+== law_env_national.dta ==
+
+. quietly count
+
+. di as txt "记录数：" r(N)
+记录数：112
+
+. tab region_level, m
+
+     行政层 |
+   级 1国家 |
+    2省 3市 |
+        4县 |      Freq.     Percent        Cum.
+------------+-----------------------------------
+     国家级 |        112      100.00      100.00
+------------+-----------------------------------
+      Total |        112      100.00
+
+. tab type, sort
+
+                               法规类型 |      Freq.     Percent        Cum.
+----------------------------------------+-----------------------------------
+                               行政法规 |         64       57.14       57.14
+                                   法律 |         25       22.32       79.46
+                               司法解释 |         19       16.96       96.43
+           有关法律问题和重大问题的决定 |          3        2.68       99.11
+                       修改、废止的决定 |          1        0.89      100.00
+----------------------------------------+-----------------------------------
+                                  Total |        112      100.00
+
+. quietly summarize publish_year
+
+. di as txt "公布年份：" r(min) " — " r(max)
+公布年份：1983 — 2025
+
+. 
+. log close
+      name:  <unnamed>
+       log:  /Users/florian/Desktop/博士研究计划/Logs/00_split_national.log
+  log type:  text
+ closed on:   5 Nov 2026, 22:00:41
+-------------------------------------------------------------------------------

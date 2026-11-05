@@ -1,0 +1,60 @@
+-------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/florian/Desktop/博士研究计划/Logs/15_drop_misnamed.log
+  log type:  text
+ opened on:   6 Nov 2026, 00:12:48
+
+. 
+. use "$root/law_env.dta", clear
+
+. quietly count
+
+. local n0 = r(N)
+
+. 
+. local bad "中华人民共和国野生植物保护法 中华民族共和国民族区域自治法 中华民族
+> 共和国野生植物保护条例 中华民族共和国森林法 中国人民共和国森林法 中国人民共和
+> 国水污染防治法 中华人民共和国城市供水条例 中华人民共和国基本农田保护条例"
+
+. 
+. local dropped = 0
+
+. foreach t of local bad {
+  2.     quietly count if title == "`t'"
+  3.     if r(N) == 1 {
+  4.         quietly drop if title == "`t'"
+  5.         local ++dropped
+  6.         di as txt "  已删除：`t'"
+  7.     }
+  8.     else if r(N) > 1 {
+  9.         di as err "  同名多条，跳过待查：`t'"
+ 10.     }
+ 11.     else di as txt "  不存在：`t'"
+ 12. }
+  已删除：中华人民共和国野生植物保护法
+  已删除：中华民族共和国民族区域自治法
+  已删除：中华民族共和国野生植物保护条例
+  已删除：中华民族共和国森林法
+  已删除：中国人民共和国森林法
+  已删除：中国人民共和国水污染防治法
+  已删除：中华人民共和国城市供水条例
+  已删除：中华人民共和国基本农田保护条例
+
+. quietly count
+
+. di as txt _n "删除 `dropped' 条；`n0' → " r(N) " 条"
+
+删除 8 条；3919 → 3911 条
+
+. save "$root/law_env.dta", replace
+file /Users/florian/Desktop/博士研究计划/law_env.dta saved
+
+. di as res "已保存：law_env.dta"
+已保存：law_env.dta
+
+. log close
+      name:  <unnamed>
+       log:  /Users/florian/Desktop/博士研究计划/Logs/15_drop_misnamed.log
+  log type:  text
+ closed on:   6 Nov 2026, 00:12:48
+-------------------------------------------------------------------------------

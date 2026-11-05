@@ -1,0 +1,237 @@
+
+  ___  ____  ____  ____  ____ ®
+ /__    /   ____/   /   ____/      18.0
+___/   /   /___/   /   /___/       MP—Parallel Edition
+
+ Statistics and Data Science       Copyright 1985-2023 StataCorp LLC
+                                   StataCorp
+                                   4905 Lakeway Drive
+                                   College Station, Texas 77845 USA
+                                   800-STATA-PC        https://www.stata.com
+                                   979-696-4600        stata@stata.com
+
+Stata license: Single-user 2-core  perpetual
+Serial number: 501806366048
+  Licensed to: Florian
+               LA
+
+Notes:
+      1. Stata is running in batch mode.
+      2. Unicode is supported; see help unicode_advice.
+      3. More than 2 billion observations are allowed; see help obs_advice.
+      4. Maximum number of variables is set to 5,000 but can be increased;
+          see help set_maxvar.
+
+. do Codes/06_merge_national.do 
+
+. *============================================================================
+> =
+. * 06_merge_national.do
+. * 目的：把 law_env_national.dta（120 条国家级）合并回 law_env.dta
+. *
+. * 处理要点：
+. *   1) 新补入的 8 部国家级法律当初用 30505–30512 编号，与地方库 id 冲突
+. *      （如 30510 = 长沙市城市供水用水管理条例），合并前重新编号；
+. *   2) 合并后 id 必须唯一，否则报错不保存；
+. *   3) 备份：脚本开头把当前 law_env.dta 复制为 law_env_premerge.dta
+. *
+. * 输入：law_env.dta（3,635）、law_env_national.dta（120）
+. * 输出：law_env.dta（3,755）、law_env_national.dta（id 已重排）
+. *============================================================================
+> =
+. 
+. version 17
+
+. clear all
+
+. set more off
+
+. global root "/Users/florian/Desktop/博士研究计划"
+
+. capture log close
+
+. log using "$root/Logs/06_merge_national.log", replace text
+(file /Users/florian/Desktop/博士研究计划/Logs/06_merge_national.log not
+    found)
+-------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/florian/Desktop/博士研究计划/Logs/06_merge_national.log
+  log type:  text
+ opened on:   5 Nov 2026, 23:01:57
+
+. 
+. *----------------------------------------------------------------------------
+> -
+. * 1. 备份
+. *----------------------------------------------------------------------------
+> -
+. capture confirm file "$root/law_env.dta"
+
+. copy "$root/law_env.dta" "$root/law_env_premerge.dta", replace
+(file /Users/florian/Desktop/博士研究计划/law_env_premerge.dta not found)
+
+. di as txt "已备份：law_env_premerge.dta"
+已备份：law_env_premerge.dta
+
+. 
+. *----------------------------------------------------------------------------
+> -
+. * 2. 给 national 中与地方库冲突的 id 重新编号
+. *----------------------------------------------------------------------------
+> -
+. use "$root/law_env.dta", clear
+
+. keep id
+
+. tempfile locids
+
+. save `locids'
+file /var/folders/7m/37x7vvj50kb31gpc00_ww0gc0000gn/T//St06456.000001 saved
+    as .dta format
+
+. quietly summarize id
+
+. local maxid = r(max)
+
+. di as txt "地方库 id 最大值：" `maxid'
+地方库 id 最大值：31540
+
+. 
+. use "$root/law_env_national.dta", clear
+
+. merge m:1 id using `locids', keep(master match) gen(inloc)
+
+    Result                      Number of obs
+    -----------------------------------------
+    Not matched                           119
+        from master                       119  (inloc==1)
+        from using                          0  (inloc==2)
+
+    Matched                                 1  (inloc==3)
+    -----------------------------------------
+
+. quietly count if inloc == 3
+
+. local nconf = r(N)
+
+. di as txt "national 中与地方库冲突的 id：" `nconf' " 个"
+national 中与地方库冲突的 id：1 个
+
+. 
+. if `nconf' > 0 {
+.     sort inloc id
+.     local next = `maxid' + 1
+.     quietly levelsof id if inloc == 3, local(oldids)
+.     foreach o of local oldids {
+  2.         replace id = `next' if id == `o' & inloc == 3
+  3.         di as txt "  id `o' -> `next'"
+  4.         local ++next
+  5.     }
+(1 real change made)
+  id 30510 -> 31541
+. }
+
+. drop inloc
+
+. 
+. * 自检：national 内部 id 唯一
+. duplicates report id
+
+Duplicates in terms of id
+
+--------------------------------------
+   Copies | Observations       Surplus
+----------+---------------------------
+        1 |          120             0
+--------------------------------------
+
+. quietly duplicates report id
+
+. if r(unique_value) != r(N) {
+.     di as err "national 内部 id 不唯一，未保存。"
+.     log close
+.     exit
+. }
+
+. save "$root/law_env_national.dta", replace
+file /Users/florian/Desktop/博士研究计划/law_env_national.dta saved
+
+. 
+. *----------------------------------------------------------------------------
+> -
+. * 3. 合并
+. *----------------------------------------------------------------------------
+> -
+. use "$root/law_env.dta", clear
+
+. quietly count
+
+. local nloc = r(N)
+
+. append using "$root/law_env_national.dta"
+(variable source_id was str46, now str82 to accommodate using data's values)
+(label envlvl already defined)
+(label reglvl already defined)
+
+. quietly count
+
+. local nall = r(N)
+
+. di as txt _n "合并：`nloc' + " `nall' - `nloc' " = `nall' 条"
+
+合并：3635 + 120 = 3755 条
+
+. 
+. * 4. 校验
+. duplicates report id
+
+Duplicates in terms of id
+
+--------------------------------------
+   Copies | Observations       Surplus
+----------+---------------------------
+        1 |         3755             0
+--------------------------------------
+
+. quietly duplicates report id
+
+. if r(unique_value) != r(N) {
+.     di as err "合并后 id 不唯一，未保存。"
+.     log close
+.     exit
+. }
+
+. 
+. tab region_level, m
+
+     行政层 |
+   级 1国家 |
+    2省 3市 |
+        4县 |      Freq.     Percent        Cum.
+------------+-----------------------------------
+     国家级 |        120        3.20        3.20
+       省级 |      1,290       34.35       37.55
+       市级 |      2,140       56.99       94.54
+       县级 |        205        5.46      100.00
+------------+-----------------------------------
+      Total |      3,755      100.00
+
+. save "$root/law_env.dta", replace
+file /Users/florian/Desktop/博士研究计划/law_env.dta saved
+
+. di as res _n "已保存：law_env.dta 共 " r(N) " 条，id 唯一"
+
+已保存：law_env.dta 共 3755 条，id 唯一
+
+. 
+. log close
+      name:  <unnamed>
+       log:  /Users/florian/Desktop/博士研究计划/Logs/06_merge_national.log
+  log type:  text
+ closed on:   5 Nov 2026, 23:01:57
+-------------------------------------------------------------------------------
+
+. *============================================================================
+> =
+. 
+end of do-file

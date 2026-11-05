@@ -1,0 +1,95 @@
+-------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/florian/Desktop/博士研究计划/Logs/17_reclassify_local.log
+  log type:  text
+ opened on:   6 Nov 2026, 00:29:21
+
+. 
+. use "$root/law_env.dta", clear
+
+. 
+. local t1 "海南经济特区水条例"
+
+. local t2 "海南自由贸易港海口江东新区条例"
+
+. local t3 "天津经济技术开发区管理条例"
+
+. local t4 "关于取消或调整部分地方性法规设定的行政审批等项目的决定"
+
+. local t5 "关于取消部分地方性法规中行政许可项目的决定"
+
+. 
+. * 海南省（460000）
+. foreach t in "`t1'" "`t2'" {
+  2.     replace type = "地方性法规" if title == "`t'"
+  3.     replace region_level = 2 if title == "`t'"
+  4.     replace province_name = "海南省" if title == "`t'"
+  5.     replace province_code = 460000 if title == "`t'"
+  6. }
+(1 real change made)
+(1 real change made)
+(0 real changes made)
+(0 real changes made)
+(1 real change made)
+(1 real change made)
+(0 real changes made)
+(0 real changes made)
+
+. * 天津市（120000）
+. replace type = "地方性法规" if title == "`t3'"
+(1 real change made)
+
+. replace region_level = 2 if title == "`t3'"
+(1 real change made)
+
+. replace province_name = "天津市" if title == "`t3'"
+(0 real changes made)
+
+. replace province_code = 120000 if title == "`t3'"
+(0 real changes made)
+
+. * 重庆市（500000）
+. foreach t in "`t4'" "`t5'" {
+  2.     replace type = "地方性法规" if title == "`t'"
+  3.     replace region_level = 2 if title == "`t'"
+  4.     replace province_name = "重庆市" if title == "`t'"
+  5.     replace province_code = 500000 if title == "`t'"
+  6. }
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+
+. 
+. list id title type region_level province_name ///
+>     if inlist(title, "`t1'", "`t2'", "`t3'", "`t4'", "`t5'"), clean noobs
+
+       id                                                    title         type
+>    region~l   provi~me  
+    31611   关于取消或调整部分地方性法规设定的行政审批等项目的决定   地方性法规
+>        省级     重庆市  
+    31612               关于取消部分地方性法规中行政许可项目的决定   地方性法规
+>        省级     重庆市  
+    31629                               天津经济技术开发区管理条例   地方性法规
+>        省级     天津市  
+    31656                                       海南经济特区水条例   地方性法规
+>        省级     海南省  
+    31657                           海南自由贸易港海口江东新区条例   地方性法规
+>        省级     海南省  
+
+. save "$root/law_env.dta", replace
+file /Users/florian/Desktop/博士研究计划/law_env.dta saved
+
+. di as res "已保存：law_env.dta"
+已保存：law_env.dta
+
+. log close
+      name:  <unnamed>
+       log:  /Users/florian/Desktop/博士研究计划/Logs/17_reclassify_local.log
+  log type:  text
+ closed on:   6 Nov 2026, 00:29:21
+-------------------------------------------------------------------------------

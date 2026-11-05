@@ -1,0 +1,470 @@
+
+  ___  ____  ____  ____  ____ ®
+ /__    /   ____/   /   ____/      18.0
+___/   /   /___/   /   /___/       MP—Parallel Edition
+
+ Statistics and Data Science       Copyright 1985-2023 StataCorp LLC
+                                   StataCorp
+                                   4905 Lakeway Drive
+                                   College Station, Texas 77845 USA
+                                   800-STATA-PC        https://www.stata.com
+                                   979-696-4600        stata@stata.com
+
+Stata license: Single-user 2-core  perpetual
+Serial number: 501806366048
+  Licensed to: Florian
+               LA
+
+Notes:
+      1. Stata is running in batch mode.
+      2. Unicode is supported; see help unicode_advice.
+      3. More than 2 billion observations are allowed; see help obs_advice.
+      4. Maximum number of variables is set to 5,000 but can be increased;
+          see help set_maxvar.
+
+. do Codes/05_add_national_batch.do 
+
+. *============================================================================
+> =
+. * 05_add_national_batch.do
+. * 目的：把 7 部被地方性法规高频援引、但不在国家级库中的法律法规补入
+. *       law_env_national.dta
+. *
+. *   法律（6）：
+. *     中华人民共和国民族区域自治法   npc.gov.cn
+. *     中华人民共和国城乡规划法       npc.gov.cn
+. *     中华人民共和国防洪法           mwr.gov.cn
+. *     中华人民共和国农业法           npc.gov.cn（2026 年第二次修订，2027-01-0
+> 1 施行）
+. *     中华人民共和国长江保护法       mee.gov.cn
+. *     中华人民共和国黄河保护法       mee.gov.cn
+. *   行政法规（1）：
+. *     城市供水条例                   国务院令第158号（原文见福建省住建厅转载
+> 页）
+. *
+. * 字段填写说明：
+. *   publish 取文本括注中的最后一个日期（最近一次修订/修正通过日）；
+. *   env_level / env_topic 为人工归类：
+. *      长江保护法、黄河保护法 → 1 核心环保
+. *      城乡规划法 → 2 资源与生态 / 环境综合管理
+. *      防洪法、城市供水条例、农业法 → 2 资源与生态
+. *      民族区域自治法非环保专项法 → env_level 置缺失、env_topic 留空
+. *   source_id 记录原文网址，便于回溯
+. *
+. * 输入：law_env_national.dta、Codes/_laws_batch.csv
+. * 输出：law_env_national.dta、Logs/05_add_national_batch.log
+. *============================================================================
+> =
+. 
+. version 17
+
+. clear all
+
+. set more off
+
+. global root "/Users/florian/Desktop/博士研究计划"
+
+. capture mkdir "$root/Logs"
+
+. capture log close
+
+. log using "$root/Logs/05_add_national_batch.log", replace text
+(file /Users/florian/Desktop/博士研究计划/Logs/05_add_national_batch.log not
+    found)
+-------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/florian/Desktop/博士研究计划/Logs/05_add_national_batch.log
+  log type:  text
+ opened on:   5 Nov 2026, 22:52:22
+
+. 
+. *----------------------------------------------------------------------------
+> -
+. * 1. 读入待补入清单
+. *----------------------------------------------------------------------------
+> -
+. confirm file "$root/Codes/_laws_batch.csv"
+
+. frame create laws
+
+. frame laws {
+.     import delimited "$root/Codes/_laws_batch.csv", clear varnames(1) ///
+>         stringcols(_all) bindquote(strict) maxquotedrows(3000) ///
+>         encoding("utf-8") case(preserve)
+(7 vars, 7 obs)
+.     gen long k1 = _n
+.     quietly count
+.     di as txt "待补入：" r(N) " 条"
+待补入：7 条
+. }
+
+. frame laws: quietly count
+
+. local nadd = r(N)
+
+. 
+. *----------------------------------------------------------------------------
+> -
+. * 2. 查重：任一标题已存在则整体不执行
+. *----------------------------------------------------------------------------
+> -
+. use "$root/law_env_national.dta", clear
+
+. quietly count
+
+. local n0 = r(N)
+
+. local dup = 0
+
+. forvalues i = 1/`nadd' {
+  2.     frame laws: local t = title[`i']
+  3.     quietly count if title == "`t'"
+  4.     if r(N) > 0 {
+  5.         di as err "  已存在：`t'"
+  6.         local ++dup
+  7.     }
+  8. }
+
+. if `dup' > 0 {
+.     di as err _n "存在重复记录，未做任何修改。请先核对 Codes/_laws_batch.csv
+> 。"
+.     log close
+.     exit
+. }
+
+. di as txt "原有 `n0' 条，无重复，开始补入。"
+原有 113 条，无重复，开始补入。
+
+. 
+. *----------------------------------------------------------------------------
+> -
+. * 3. 追加记录
+. *----------------------------------------------------------------------------
+> -
+. quietly summarize id
+
+. local base = r(max)
+
+. gen long k1 = .
+(113 missing values generated)
+
+. set obs `=`n0' + `nadd''
+Number of observations (_N) was 113, now 120.
+
+. forvalues i = 1/`nadd' {
+  2.     local o = `n0' + `i'
+  3.     frame laws: local t  = title[`i']
+  4.     frame laws: local ty = type[`i']
+  5.     frame laws: local pd = publish[`i']
+  6.     frame laws: local el = env_level[`i']
+  7.     frame laws: local et = env_topic[`i']
+  8.     frame laws: local su = url[`i']
+  9. 
+.     replace id           = `base' + `i'        in `o'
+ 10.     replace title        = "`t'"               in `o'
+ 11.     replace category     = "`ty'"              in `o'
+ 12.     replace type         = "`ty'"              in `o'
+ 13.     replace status       = "有效"              in `o'
+ 14.     replace publish      = cofd(date("`pd'","YMD"))  in `o'
+ 15.     replace publish_year = year(date("`pd'","YMD"))  in `o'
+ 16.     replace expiry       = ""                  in `o'
+ 17.     replace file_path    = ""                  in `o'
+ 18.     replace source_id    = "`su'"              in `o'
+ 19.     if "`el'" != "." replace env_level = real("`el'") in `o'
+ 20.     replace env_topic    = "`et'"              in `o'
+ 21.     replace env_keywords = ""                  in `o'
+ 22.     replace region_level = 1                   in `o'
+ 23.     replace province_name = "全国"             in `o'
+ 24.     replace province_code = .                  in `o'
+ 25.     replace city_name    = ""                  in `o'
+ 26.     replace city_code    = .                   in `o'
+ 27.     replace county_name  = ""                  in `o'
+ 28.     replace county_code  = .                   in `o'
+ 29.     replace dup_count    = 1                   in `o'
+ 30.     replace create_time  = "2026-11-05 23:05:00" in `o'
+ 31.     replace k1           = `i'                 in `o'
+ 32. }
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(0 real changes made)
+(0 real changes made)
+variable source_id was str65 now str82
+(1 real change made)
+(0 real changes made)
+(0 real changes made)
+(1 real change made)
+(1 real change made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(0 real changes made)
+(0 real changes made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(0 real changes made)
+(1 real change made)
+(1 real change made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(0 real changes made)
+(0 real changes made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(0 real changes made)
+(1 real change made)
+(1 real change made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(0 real changes made)
+(0 real changes made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(0 real changes made)
+(1 real change made)
+(1 real change made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(0 real changes made)
+(0 real changes made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(0 real changes made)
+(1 real change made)
+(1 real change made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(0 real changes made)
+(0 real changes made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(0 real changes made)
+(1 real change made)
+(1 real change made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(0 real changes made)
+(0 real changes made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+(0 real changes made)
+(1 real change made)
+(1 real change made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(0 real changes made)
+(1 real change made)
+(1 real change made)
+(1 real change made)
+
+. format publish %tc
+
+. 
+. * 正文通过框架链接取过来（避免把上万字塞进宏）
+. frlink m:1 k1, frame(laws)
+(113 observations in frame default unmatched)
+
+. frget txt = content, from(laws)
+(113 missing values generated)
+(1 variable copied from linked frame)
+
+. replace content = txt if !missing(k1)
+(7 real changes made)
+
+. drop k1 txt
+
+. frame drop laws
+
+. 
+. *----------------------------------------------------------------------------
+> -
+. * 4. 校验后保存
+. *----------------------------------------------------------------------------
+> -
+. quietly count
+
+. if r(N) != `n0' + `nadd' {
+.     di as err "条数异常，未保存。"
+.     log close
+.     exit
+. }
+
+. quietly count if missing(content)
+
+. if r(N) > 0 {
+.     di as err "有 " r(N) " 条正文为空，未保存。"
+.     log close
+.     exit
+. }
+
+. local n1 = _N
+
+. save "$root/law_env_national.dta", replace
+file /Users/florian/Desktop/博士研究计划/law_env_national.dta saved
+
+. di as res "已保存：law_env_national.dta 现有 `n1' 条"
+已保存：law_env_national.dta 现有 120 条
+
+. 
+. *----------------------------------------------------------------------------
+> -
+. * 5. 复核
+. *----------------------------------------------------------------------------
+> -
+. use "$root/law_env_national.dta", clear
+
+. quietly count
+
+. di as txt "总条数：" r(N)
+总条数：120
+
+. gsort -publish_year
+
+. list id title type status publish env_level env_topic if id > `base', ///
+>     clean noobs
+
+       id                          title       type   status              publi
+> sh        env_level        env_topic  
+    30509           中华人民共和国农业法       法律     有效   28aug2026 00:00:
+> 00   资源与生态保护   资源与土地矿产  
+    30512       中华人民共和国黄河保护法       法律     有效   30oct2022 00:00:
+> 00     核心环境保护   水污染与水资源  
+    30511       中华人民共和国长江保护法       法律     有效   26dec2020 00:00:
+> 00     核心环境保护   水污染与水资源  
+    30507       中华人民共和国城乡规划法       法律     有效   23apr2019 00:00:
+> 00   资源与生态保护     环境综合管理  
+    30508           中华人民共和国防洪法       法律     有效   02jul2016 00:00:
+> 00   资源与生态保护   水污染与水资源  
+    30506   中华人民共和国民族区域自治法       法律     有效   28feb2001 00:00:
+> 00                .                   
+    30510                   城市供水条例   行政法规     有效   19jul1994 00:00:
+> 00   资源与生态保护   水污染与水资源  
+
+. tab type, sort
+
+                               法规类型 |      Freq.     Percent        Cum.
+----------------------------------------+-----------------------------------
+                               行政法规 |         65       54.17       54.17
+                                   法律 |         32       26.67       80.83
+                               司法解释 |         19       15.83       96.67
+           有关法律问题和重大问题的决定 |          3        2.50       99.17
+                       修改、废止的决定 |          1        0.83      100.00
+----------------------------------------+-----------------------------------
+                                  Total |        120      100.00
+
+. tab env_level, m
+
+      环保相关 |
+          程度 |
+     1核心环保 |
+     2资源与生 |
+            态 |
+     3能源与气 |
+            候 |      Freq.     Percent        Cum.
+---------------+-----------------------------------
+  核心环境保护 |         64       53.33       53.33
+资源与生态保护 |         55       45.83       99.17
+             . |          1        0.83      100.00
+---------------+-----------------------------------
+         Total |        120      100.00
+
+. log close
+      name:  <unnamed>
+       log:  /Users/florian/Desktop/博士研究计划/Logs/05_add_national_batch.log
+  log type:  text
+ closed on:   5 Nov 2026, 22:52:22
+-------------------------------------------------------------------------------
+
+. *============================================================================
+> =
+. 
+end of do-file

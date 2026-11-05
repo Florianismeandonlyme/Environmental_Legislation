@@ -1,0 +1,182 @@
+-------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  /Users/florian/Desktop/博士研究计划/Logs/03_refered.log
+  log type:  text
+ opened on:   6 Nov 2026, 00:30:09
+
+. 
+. *----------------------------------------------------------------------------
+> -
+. * 1. 读入抽取结果
+. *----------------------------------------------------------------------------
+> -
+. confirm file "$root/Codes/_refered.dta"
+
+. use "$root/Codes/_refered.dta", clear
+
+. rename n_refered n_ref
+
+. quietly count
+
+. di as txt "抽取结果：" r(N) " 条"
+抽取结果：3911 条
+
+. tempfile refs
+
+. save `refs'
+file /var/folders/7m/37x7vvj50kb31gpc00_ww0gc0000gn/T//St09808.000001 saved
+    as .dta format
+
+. 
+. *----------------------------------------------------------------------------
+> -
+. * 2. 合并回主数据
+. *----------------------------------------------------------------------------
+> -
+. use "$root/law_env.dta", clear
+
+. capture drop refered n_ref has_ref      // 允许脚本重复运行
+
+. quietly count
+
+. local nmain = r(N)
+
+. merge 1:1 id using `refs', nogen keep(master match)
+
+    Result                      Number of obs
+    -----------------------------------------
+    Not matched                             0
+    Matched                             3,911  
+    -----------------------------------------
+
+. quietly count if missing(refered)
+
+. di as txt "未匹配到抽取结果：" r(N) " 条"
+未匹配到抽取结果：1337 条
+
+. 
+. * 3. 校验后保存
+. quietly count
+
+. if r(N) != `nmain' {
+.     di as err "合并后记录数异常（`nmain' → " r(N) "），未保存。"
+.     log close
+.     exit
+. }
+
+. replace refered = "" if missing(refered)
+(0 real changes made)
+
+. gen byte has_ref = (refered != "")
+
+. label variable refered "立法依据涉及的上级法律（；分隔）"
+
+. label variable n_ref   "引用上级法律数量"
+
+. label variable has_ref "是否有具名立法依据"
+
+. 
+. save "$root/law_env.dta", replace
+file /Users/florian/Desktop/博士研究计划/law_env.dta saved
+
+. di as res "已保存：law_env.dta 新增 refered、n_ref、has_ref"
+已保存：law_env.dta 新增 refered、n_ref、has_ref
+
+. 
+. *----------------------------------------------------------------------------
+> -
+. * 4. 复核
+. *----------------------------------------------------------------------------
+> -
+. describe refered n_ref has_ref
+
+Variable      Storage   Display    Value
+    name         type    format    label      Variable label
+-------------------------------------------------------------------------------
+refered         str333  %333s                 立法依据涉及的上级法律（；分隔）
+n_ref           long    %12.0g                引用上级法律数量
+has_ref         byte    %8.0g                 是否有具名立法依据
+
+. tab has_ref, m
+
+     是否有 |
+     具名立 |
+     法依据 |      Freq.     Percent        Cum.
+------------+-----------------------------------
+          0 |      1,337       34.19       34.19
+          1 |      2,574       65.81      100.00
+------------+-----------------------------------
+      Total |      3,911      100.00
+
+. summarize n_ref, detail
+
+                  引用上级法律数量
+-------------------------------------------------------------
+      Percentiles      Smallest
+ 1%            0              0
+ 5%            0              0
+10%            0              0       Obs               3,911
+25%            0              0       Sum of wgt.       3,911
+
+50%            1                      Mean           1.234978
+                        Largest       Std. dev.      1.155777
+75%            2              6
+90%            3              6       Variance        1.33582
+95%            3              6       Skewness       .6859516
+99%            4              8       Kurtosis       3.011949
+
+. 
+. di as res _n "== 示例：前 5 条有具名依据的记录 =="
+
+== 示例：前 5 条有具名依据的记录 ==
+
+. list id title refered if has_ref == 1 in 1/5, clean noobs
+
+    id                                        title                            
+>                                                   refered  
+    22               阳江市水产养殖尾水污染防治规定   中华人民共和国环境保护法
+> ；中华人民共和国水污染防治法；中华人民共和国海洋环境保护法  
+    23   湘西土家族苗族自治州花垣县矿山生态修复条例           中华人民共和国矿
+> 产资源法；中华人民共和国环境保护法；湖南省地质环境保护条例  
+
+. 
+. di as res _n "== 抽查：随机 5 条无具名依据的记录（看其依据句是否确实无具名法
+> ） =="
+
+== 抽查：随机 5 条无具名依据的记录（看其依据句是否确实无具名法） ==
+
+. preserve
+
+.     keep if has_ref == 0
+(2,574 observations deleted)
+
+.     set seed 20261105
+
+.     gen double u = runiform()
+
+.     sort u
+
+.     list title in 1/5, clean noobs
+
+                                                                               
+>                                     title  
+                                  呼伦贝尔市人民代表大会常务委员会关于修改《呼
+> 伦贝尔市城市市容和环境卫生管理条例》的决定  
+                                                                               
+>                  武夷山国家公园条例(试行)  
+                                                                               
+>                  淄博市污染源自动监控条例  
+    玉龙纳西族自治县人民代表大会常务委员会关于停止适用《云南省玉龙纳西族自治县
+> 拉市海高原湿地保护管理条例》有关条款的决定  
+                                                                               
+>                襄阳市城市建筑垃圾治理条例  
+
+. restore
+
+. 
+. log close
+      name:  <unnamed>
+       log:  /Users/florian/Desktop/博士研究计划/Logs/03_refered.log
+  log type:  text
+ closed on:   6 Nov 2026, 00:30:10
+-------------------------------------------------------------------------------
